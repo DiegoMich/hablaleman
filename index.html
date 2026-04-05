@@ -437,49 +437,51 @@
       } catch (_) {}
     }
 
-    // --- TTS ---
-    let activeAudio = null;
+    // --- TTS (Web Speech API) ---
     let activeBtn = null;
 
-    function speak(text, btn, rate = 1) {
+    function speak(text, btn, rate = 0.9) {
       if (!text.trim()) return;
 
-      // Si ya está reproduciendo esta frase, detener
+      if (!window.speechSynthesis) {
+        document.getElementById('tts-warning').style.display = 'block';
+        return;
+      }
+
+      // Toggle off si es el mismo botón
       if (activeBtn === btn) {
-        if (activeAudio) { activeAudio.pause(); activeAudio.src = ''; activeAudio = null; }
+        window.speechSynthesis.cancel();
         btn.classList.remove('speaking');
         activeBtn = null;
         return;
       }
 
-      // Detener audio anterior
-      if (activeAudio) { activeAudio.pause(); activeAudio.src = ''; activeAudio = null; }
-      if (activeBtn)   { activeBtn.classList.remove('speaking'); }
+      window.speechSynthesis.cancel();
+      if (activeBtn) activeBtn.classList.remove('speaking');
 
       activeBtn = btn;
       btn.classList.add('speaking');
 
-      const url = 'https://translate.google.com/translate_tts?ie=UTF-8' +
-                  '&q=' + encodeURIComponent(text.slice(0, 200)) +
-                  '&tl=de&client=tw-ob&ttsspeed=0.8';
-      const audio = new Audio(url);
-      audio.playbackRate = rate;
-      activeAudio = audio;
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang  = 'de-DE';
+      utterance.rate  = rate;
+      utterance.pitch = 1.1;
 
-      audio.onended = () => {
+      // Usar voz alemana si está disponible (Chrome provee "Google Deutsch" online)
+      const germanVoice = window.speechSynthesis.getVoices().find(v => v.lang.startsWith('de'));
+      if (germanVoice) utterance.voice = germanVoice;
+
+      utterance.onend = () => {
         btn.classList.remove('speaking');
-        if (activeBtn === btn) { activeBtn = null; activeAudio = null; }
+        if (activeBtn === btn) activeBtn = null;
       };
 
-      audio.onerror = () => {
+      utterance.onerror = () => {
         btn.classList.remove('speaking');
-        if (activeBtn === btn) { activeBtn = null; activeAudio = null; }
+        if (activeBtn === btn) activeBtn = null;
       };
 
-      audio.play().catch(() => {
-        btn.classList.remove('speaking');
-        if (activeBtn === btn) { activeBtn = null; activeAudio = null; }
-      });
+      window.speechSynthesis.speak(utterance);
     }
 
     // --- Clear all ---
