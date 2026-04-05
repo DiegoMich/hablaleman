@@ -338,6 +338,50 @@
       font-size: 0.95rem;
     }
 
+    .hf-banner {
+      display: none;
+      background: #eef2ff;
+      color: #3730a3;
+      border: 2px solid #a5b4fc;
+      border-radius: 16px;
+      padding: 1rem 1.4rem;
+      max-width: 960px;
+      margin: 0 auto 1.5rem;
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+
+    .hf-banner a { color: #4f46e5; }
+
+    .hf-token-row {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-top: 0.6rem;
+    }
+
+    .hf-token-row input {
+      font-family: monospace;
+      font-size: 0.9rem;
+      padding: 0.35rem 0.7rem;
+      border: 1.5px solid #a5b4fc;
+      border-radius: 8px;
+      flex: 1;
+      min-width: 200px;
+      outline: none;
+    }
+
+    .hf-token-row button {
+      padding: 0.35rem 1rem;
+      border: none;
+      border-radius: 8px;
+      background: #4f46e5;
+      color: #fff;
+      font-family: 'Nunito', sans-serif;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
     footer {
       text-align: center;
       margin-top: 3rem;
@@ -356,6 +400,17 @@
 
   <div class="warning" id="tts-warning">
     ⚠️ Tu navegador no admite síntesis de voz. Abre esta página en Chrome o Edge para escuchar el audio.
+  </div>
+
+  <div class="hf-banner" id="hf-banner">
+    🔑 Para escuchar en alemán se necesita un token gratuito de Hugging Face.<br>
+    <strong>Es gratis y tarda 2 minutos:</strong>
+    <a href="https://huggingface.co/join" target="_blank">Crear cuenta</a> →
+    <a href="https://huggingface.co/settings/tokens/new?tokenType=read" target="_blank">Crear token (Read)</a> → pegar abajo.
+    <div class="hf-token-row">
+      <input type="password" id="hf-token-input" placeholder="hf_xxxxxxxxxxxxxxxx" autocomplete="off">
+      <button onclick="saveHFToken()">Guardar</button>
+    </div>
   </div>
 
   <div class="toolbar">
@@ -443,12 +498,24 @@
 
     const HF_TTS_URL = 'https://api-inference.huggingface.co/models/facebook/mms-tts-deu';
 
-    // Warmup silencioso: el modelo HF tarda en arrancar la primera vez
-    fetch(HF_TTS_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ inputs: 'Hallo' })
-    }).catch(() => {});
+    // Token: URL hash (#token=hf_xxx) tiene prioridad, luego localStorage
+    let hfToken = (() => {
+      const fromHash = new URLSearchParams(location.hash.slice(1)).get('token');
+      if (fromHash) { localStorage.setItem('hf_token', fromHash); return fromHash; }
+      return localStorage.getItem('hf_token') || '';
+    })();
+
+    function saveHFToken() {
+      const val = document.getElementById('hf-token-input').value.trim();
+      if (!val) return;
+      hfToken = val;
+      localStorage.setItem('hf_token', val);
+      document.getElementById('hf-banner').style.display = 'none';
+    }
+
+    function showHFBanner() {
+      document.getElementById('hf-banner').style.display = 'block';
+    }
 
     async function speak(text, btn, rate = 1) {
       if (!text.trim()) return;
@@ -466,12 +533,24 @@
       activeBtn = btn;
       btn.classList.add('speaking');
 
+      if (!hfToken) { showHFBanner(); btn.classList.remove('speaking'); activeBtn = null; return; }
+
       try {
         const res = await fetch(HF_TTS_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${hfToken}`
+          },
           body: JSON.stringify({ inputs: text })
         });
+
+        if (res.status === 401 || res.status === 403) {
+          hfToken = '';
+          localStorage.removeItem('hf_token');
+          showHFBanner();
+          throw new Error('invalid-token');
+        }
         if (!res.ok) throw new Error(res.status);
 
         const blob  = await res.blob();
@@ -492,20 +571,8 @@
         await audio.play();
 
       } catch {
-        // Fallback: Web Speech API
-        if (!window.speechSynthesis) {
-          btn.classList.remove('speaking');
-          if (activeBtn === btn) activeBtn = null;
-          return;
-        }
-        const u = new SpeechSynthesisUtterance(text);
-        u.lang = 'de-DE';
-        u.rate = rate;
-        u.onend = u.onerror = () => {
-          btn.classList.remove('speaking');
-          if (activeBtn === btn) activeBtn = null;
-        };
-        window.speechSynthesis.speak(u);
+        btn.classList.remove('speaking');
+        if (activeBtn === btn) { activeBtn = null; activeAudio = null; }
       }
     }
 
