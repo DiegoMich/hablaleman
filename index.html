@@ -338,49 +338,6 @@
       font-size: 0.95rem;
     }
 
-    .hf-banner {
-      display: none;
-      background: #eef2ff;
-      color: #3730a3;
-      border: 2px solid #a5b4fc;
-      border-radius: 16px;
-      padding: 1rem 1.4rem;
-      max-width: 960px;
-      margin: 0 auto 1.5rem;
-      font-size: 0.95rem;
-      line-height: 1.6;
-    }
-
-    .hf-banner a { color: #4f46e5; }
-
-    .hf-token-row {
-      display: flex;
-      gap: 0.5rem;
-      flex-wrap: wrap;
-      margin-top: 0.6rem;
-    }
-
-    .hf-token-row input {
-      font-family: monospace;
-      font-size: 0.9rem;
-      padding: 0.35rem 0.7rem;
-      border: 1.5px solid #a5b4fc;
-      border-radius: 8px;
-      flex: 1;
-      min-width: 200px;
-      outline: none;
-    }
-
-    .hf-token-row button {
-      padding: 0.35rem 1rem;
-      border: none;
-      border-radius: 8px;
-      background: #4f46e5;
-      color: #fff;
-      font-family: 'Nunito', sans-serif;
-      font-weight: 700;
-      cursor: pointer;
-    }
 
     footer {
       text-align: center;
@@ -402,17 +359,6 @@
     ⚠️ Tu navegador no admite síntesis de voz. Abre esta página en Chrome o Edge para escuchar el audio.
   </div>
 
-  <div class="hf-banner" id="hf-banner">
-    🔑 Para escuchar en alemán se necesita un token gratuito de Hugging Face.<br>
-    <strong>Es gratis y tarda 2 minutos:</strong>
-    <a href="https://huggingface.co/join" target="_blank">Crear cuenta</a> →
-    <a href="https://huggingface.co/settings/tokens/new?tokenType=read" target="_blank">Crear token (Read)</a> → pegar abajo.
-    <div class="hf-token-row">
-      <input type="password" id="hf-token-input" placeholder="hf_xxxxxxxxxxxxxxxx" autocomplete="off">
-      <button onclick="saveHFToken()">Guardar</button>
-    </div>
-  </div>
-
   <div class="toolbar">
     <div class="phrase-counter">Frases: <span id="counter">0</span> / 10</div>
     <button class="btn-clear" id="btn-clear" onclick="clearAll()">🗑️ Limpiar todo</button>
@@ -429,16 +375,11 @@
     const STORAGE_KEY = 'hablaleman_phrases';
 
     const DEFAULTS = [
-      { de: "Hallo! Wie geht es dir?",         es: "¡Hola! ¿Cómo estás?" },
-      { de: "Guten Morgen!",                    es: "¡Buenos días!" },
-      { de: "Guten Tag!",                       es: "¡Buenas tardes!" },
-      { de: "Auf Wiedersehen!",                 es: "¡Hasta luego!" },
-      { de: "Bitte.",                           es: "Por favor." },
-      { de: "Danke schön!",                     es: "¡Muchas gracias!" },
-      { de: "Entschuldigung!",                  es: "¡Disculpe!" },
-      { de: "Ich verstehe das nicht.",          es: "No entiendo eso." },
-      { de: "Wo ist die Toilette?",             es: "¿Dónde está el baño?" },
-      { de: "Ich lerne Deutsch!",               es: "¡Estoy aprendiendo alemán!" },
+      { de: "Ich heiße _.",                   es: "Me llamo _." },
+      { de: "Ich bin _ Jahre alt.",           es: "Tengo _ años." },
+      { de: "Ich habe im _ Geburtstag.",      es: "Mi cumpleaños es en _." },
+      { de: "Ich wohne in _.",                es: "Vivo en _." },
+      { de: "Meine Lieblingsfarbe ist _.",    es: "Mi color favorito es _." },
     ];
 
     // --- Persistence ---
@@ -492,85 +433,80 @@
       } catch (_) {}
     }
 
-    // --- TTS (Hugging Face MMS German + Web Speech fallback) ---
+    // --- TTS (SoundOfText - Asynchronous Google TTS wrapper) ---
+    let activeBtn = null;
     let activeAudio = null;
-    let activeBtn   = null;
-
-    const HF_TTS_URL = 'https://api-inference.huggingface.co/models/facebook/mms-tts-deu';
-
-    // Token: URL hash (#token=hf_xxx) tiene prioridad, luego localStorage
-    let hfToken = (() => {
-      const fromHash = new URLSearchParams(location.hash.slice(1)).get('token');
-      if (fromHash) { localStorage.setItem('hf_token', fromHash); return fromHash; }
-      return localStorage.getItem('hf_token') || '';
-    })();
-
-    function saveHFToken() {
-      const val = document.getElementById('hf-token-input').value.trim();
-      if (!val) return;
-      hfToken = val;
-      localStorage.setItem('hf_token', val);
-      document.getElementById('hf-banner').style.display = 'none';
-    }
-
-    function showHFBanner() {
-      document.getElementById('hf-banner').style.display = 'block';
-    }
 
     async function speak(text, btn, rate = 1) {
       if (!text.trim()) return;
 
       if (activeBtn === btn) {
-        if (activeAudio) { activeAudio.pause(); activeAudio.src = ''; activeAudio = null; }
+        if (activeAudio) { activeAudio.pause(); activeAudio = null; }
         btn.classList.remove('speaking');
         activeBtn = null;
         return;
       }
 
-      if (activeAudio) { activeAudio.pause(); activeAudio.src = ''; activeAudio = null; }
+      if (activeAudio) { activeAudio.pause(); activeAudio = null; }
       if (activeBtn)   activeBtn.classList.remove('speaking');
 
       activeBtn = btn;
       btn.classList.add('speaking');
 
-      if (!hfToken) { showHFBanner(); btn.classList.remove('speaking'); activeBtn = null; return; }
-
       try {
-        const res = await fetch(HF_TTS_URL, {
+        // Step 1: Request sound creation
+        const createRes = await fetch('https://api.soundoftext.com/sounds', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${hfToken}`
-          },
-          body: JSON.stringify({ inputs: text })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            engine: 'google',
+            data: { text, voice: 'de-DE' }
+          })
         });
 
-        if (res.status === 401 || res.status === 403) {
-          hfToken = '';
-          localStorage.removeItem('hf_token');
-          showHFBanner();
-          throw new Error('invalid-token');
-        }
-        if (!res.ok) throw new Error(res.status);
+        if (!createRes.ok) throw new Error('API Error');
+        const { success, id } = await createRes.json();
+        if (!success) throw new Error('Sound creation failed');
 
-        const blob  = await res.blob();
-        const url   = URL.createObjectURL(blob);
-        const audio = new Audio(url);
-        audio.playbackRate = rate;
+        // Step 2: Poll for status until "Done"
+        let mp3Url = null;
+        for (let i = 0; i < 10; i++) { // Try up to 10 times
+          const statusRes = await fetch(`https://api.soundoftext.com/sounds/${id}`);
+          const statusData = await statusRes.json();
+          
+          if (statusData.status === 'Done') {
+            mp3Url = statusData.location;
+            break;
+          } else if (statusData.status === 'Error') {
+            throw new Error('TTS Generation Error');
+          }
+          
+          // Wait 1s before next poll
+          await new Promise(r => setTimeout(r, 1000));
+        }
+
+        if (!mp3Url) throw new Error('Timeout waiting for TTS');
+
+        // Step 3: Play the sound
+        const audio = new Audio(mp3Url);
         activeAudio = audio;
+        audio.playbackRate = rate;
 
         audio.onended = () => {
           btn.classList.remove('speaking');
           if (activeBtn === btn) { activeBtn = null; activeAudio = null; }
-          URL.revokeObjectURL(url);
         };
-        audio.onerror = () => {
+        
+        audio.onerror = (err) => {
+          console.error("Audio Playback Error:", err);
           btn.classList.remove('speaking');
           if (activeBtn === btn) { activeBtn = null; activeAudio = null; }
         };
-        await audio.play();
 
-      } catch {
+        await audio.play();
+        
+      } catch (e) {
+        console.error("TTS Error:", e);
         btn.classList.remove('speaking');
         if (activeBtn === btn) { activeBtn = null; activeAudio = null; }
       }

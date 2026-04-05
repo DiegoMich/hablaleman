@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:responsivevoice.org)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:www.npmjs.com)",
+      "WebFetch(domain:cdn.jsdelivr.net)",
+      "WebFetch(domain:www.jsdelivr.net)",
+      "WebFetch(domain:soundoftext.com)",
+      "WebFetch(domain:ttsmp3.com)",
+      "WebFetch(domain:api.soundoftext.com)",
+      "WebFetch(domain:api.streamelements.com)"
+    ]
+  }
+}
