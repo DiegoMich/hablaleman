@@ -437,60 +437,76 @@
       } catch (_) {}
     }
 
-    // --- TTS (Web Speech API) ---
-    let activeBtn = null;
+    // --- TTS (Hugging Face MMS German + Web Speech fallback) ---
+    let activeAudio = null;
+    let activeBtn   = null;
 
-    function getVoices() {
-      return new Promise(resolve => {
-        const voices = window.speechSynthesis.getVoices();
-        if (voices.length) { resolve(voices); return; }
-        window.speechSynthesis.onvoiceschanged = () =>
-          resolve(window.speechSynthesis.getVoices());
-      });
-    }
+    const HF_TTS_URL = 'https://api-inference.huggingface.co/models/facebook/mms-tts-deu';
 
-    async function speak(text, btn, rate = 0.9) {
+    // Warmup silencioso: el modelo HF tarda en arrancar la primera vez
+    fetch(HF_TTS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ inputs: 'Hallo' })
+    }).catch(() => {});
+
+    async function speak(text, btn, rate = 1) {
       if (!text.trim()) return;
 
-      if (!window.speechSynthesis) {
-        document.getElementById('tts-warning').style.display = 'block';
-        return;
-      }
-
-      // Toggle off si es el mismo botón
       if (activeBtn === btn) {
-        window.speechSynthesis.cancel();
+        if (activeAudio) { activeAudio.pause(); activeAudio.src = ''; activeAudio = null; }
         btn.classList.remove('speaking');
         activeBtn = null;
         return;
       }
 
-      window.speechSynthesis.cancel();
-      if (activeBtn) activeBtn.classList.remove('speaking');
+      if (activeAudio) { activeAudio.pause(); activeAudio.src = ''; activeAudio = null; }
+      if (activeBtn)   activeBtn.classList.remove('speaking');
 
       activeBtn = btn;
       btn.classList.add('speaking');
 
-      const voices = await getVoices();
-      const germanVoice = voices.find(v => v.lang.startsWith('de'));
+      try {
+        const res = await fetch(HF_TTS_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ inputs: text })
+        });
+        if (!res.ok) throw new Error(res.status);
 
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang  = 'de-DE';
-      utterance.rate  = rate;
-      utterance.pitch = 1.1;
-      if (germanVoice) utterance.voice = germanVoice;
+        const blob  = await res.blob();
+        const url   = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audio.playbackRate = rate;
+        activeAudio = audio;
 
-      utterance.onend = () => {
-        btn.classList.remove('speaking');
-        if (activeBtn === btn) activeBtn = null;
-      };
+        audio.onended = () => {
+          btn.classList.remove('speaking');
+          if (activeBtn === btn) { activeBtn = null; activeAudio = null; }
+          URL.revokeObjectURL(url);
+        };
+        audio.onerror = () => {
+          btn.classList.remove('speaking');
+          if (activeBtn === btn) { activeBtn = null; activeAudio = null; }
+        };
+        await audio.play();
 
-      utterance.onerror = () => {
-        btn.classList.remove('speaking');
-        if (activeBtn === btn) activeBtn = null;
-      };
-
-      window.speechSynthesis.speak(utterance);
+      } catch {
+        // Fallback: Web Speech API
+        if (!window.speechSynthesis) {
+          btn.classList.remove('speaking');
+          if (activeBtn === btn) activeBtn = null;
+          return;
+        }
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = 'de-DE';
+        u.rate = rate;
+        u.onend = u.onerror = () => {
+          btn.classList.remove('speaking');
+          if (activeBtn === btn) activeBtn = null;
+        };
+        window.speechSynthesis.speak(u);
+      }
     }
 
     // --- Clear all ---
