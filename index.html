@@ -440,7 +440,16 @@
     // --- TTS (Web Speech API) ---
     let activeBtn = null;
 
-    function speak(text, btn, rate = 0.9) {
+    function getVoices() {
+      return new Promise(resolve => {
+        const voices = window.speechSynthesis.getVoices();
+        if (voices.length) { resolve(voices); return; }
+        window.speechSynthesis.onvoiceschanged = () =>
+          resolve(window.speechSynthesis.getVoices());
+      });
+    }
+
+    async function speak(text, btn, rate = 0.9) {
       if (!text.trim()) return;
 
       if (!window.speechSynthesis) {
@@ -462,13 +471,13 @@
       activeBtn = btn;
       btn.classList.add('speaking');
 
+      const voices = await getVoices();
+      const germanVoice = voices.find(v => v.lang.startsWith('de'));
+
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang  = 'de-DE';
       utterance.rate  = rate;
       utterance.pitch = 1.1;
-
-      // Usar voz alemana si está disponible (Chrome provee "Google Deutsch" online)
-      const germanVoice = window.speechSynthesis.getVoices().find(v => v.lang.startsWith('de'));
       if (germanVoice) utterance.voice = germanVoice;
 
       utterance.onend = () => {
