@@ -490,7 +490,14 @@
         // Step 3: Play the sound
         const audio = new Audio(mp3Url);
         activeAudio = audio;
-        audio.playbackRate = rate;
+        
+        // Browsers handle 0.7 much better than 0.5 without major artifacts
+        audio.playbackRate = rate === 1 ? 1 : 0.7;
+        
+        // Ensure pitch is preserved (most modern browsers do this by default, but we'll be explicit)
+        if ('preservesPitch' in audio) audio.preservesPitch = true;
+        else if ('mozPreservesPitch' in audio) audio.mozPreservesPitch = true;
+        else if ('webkitPreservesPitch' in audio) audio.webkitPreservesPitch = true;
 
         audio.onended = () => {
           btn.classList.remove('speaking');
