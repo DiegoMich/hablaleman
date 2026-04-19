@@ -360,7 +360,7 @@
   </div>
 
   <div class="toolbar">
-    <div class="phrase-counter">Frases: <span id="counter">0</span> / 10</div>
+    <div class="phrase-counter">Frases: <span id="counter">0</span> / 20</div>
     <button class="btn-clear" id="btn-clear" onclick="clearAll()">🗑️ Limpiar todo</button>
   </div>
 
@@ -371,15 +371,30 @@
   </footer>
 
   <script>
-    const MAX = 10;
+    const MAX = 20;
     const STORAGE_KEY = 'hablaleman_phrases';
 
     const DEFAULTS = [
-      { de: "Ich heiße _.",                   es: "Me llamo _." },
-      { de: "Ich bin _ Jahre alt.",           es: "Tengo _ años." },
-      { de: "Ich habe im _ Geburtstag.",      es: "Mi cumpleaños es en _." },
-      { de: "Ich wohne in _.",                es: "Vivo en _." },
-      { de: "Meine Lieblingsfarbe ist _.",    es: "Mi color favorito es _." },
+      { de: "eins",       es: "uno" },
+      { de: "zwei",       es: "dos" },
+      { de: "drei",       es: "tres" },
+      { de: "vier",       es: "cuatro" },
+      { de: "fünf",       es: "cinco" },
+      { de: "sechs",      es: "seis" },
+      { de: "sieben",     es: "siete" },
+      { de: "acht",       es: "ocho" },
+      { de: "neun",       es: "nueve" },
+      { de: "zehn",       es: "diez" },
+      { de: "elf",        es: "once" },
+      { de: "zwölf",      es: "doce" },
+      { de: "dreizehn",   es: "trece" },
+      { de: "vierzehn",   es: "catorce" },
+      { de: "fünfzehn",   es: "quince" },
+      { de: "sechzehn",   es: "dieciséis" },
+      { de: "siebzehn",   es: "diecisiete" },
+      { de: "achtzehn",   es: "dieciocho" },
+      { de: "neunzehn",   es: "diecinueve" },
+      { de: "zwanzig",    es: "veinte" },
     ];
 
     // --- Persistence ---
